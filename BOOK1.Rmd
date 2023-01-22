@@ -1,0 +1,189 @@
+---
+title: "DS340W PARENT PAPER CODE IMPLEMENTATION"
+author: "JACOB HURLEY"
+date: '1/22/23'
+output: html_notebook
+---
+```{r}
+# clean up workspace environment
+rm(list = ls())
+knitr::opts_chunk$set(fig.width=8, fig.height=12)
+
+# all packages used for the assignment
+library(tidyverse)
+library(rjson)
+library(jsonlite)
+```
+
+## First, load in the data sets
+
+
+```{r}
+kPlaylists <- read.csv("kaggle_playlists.csv")
+kPlaylistsGenre <- read.csv("kaggle_genres.csv")
+sPlaylists <- fromJSON("spotify1.json")[[2]]
+sPlaylists2 <- fromJSON("spotify2.json")[[2]]
+sPlaylistsTotal <- bind_rows(sPlaylists, sPlaylists2)
+```
+## Here, create a NULL data frame to be used later on
+```{r}
+AvgData <- data.frame(NULL)
+```
+## Playlists' Number of Tracks vs Time (minutes) Classified by is collaborative or not
+Here is a quick view of the Spotify Data set visualized by a graph:
+```{r fig.width=12, fig.height=8}
+# first graph seen here
+sPlaylistsTotal %>%
+  mutate(duration_minutes = duration_ms/60000) %>% 
+  ggplot(aes(x = duration_minutes, y = num_tracks)) +
+  aes(colour = collaborative) + 
+  ggtitle("Playlists' Number of Tracks vs Time (minutes)") +
+  geom_smooth() +
+  scale_x_continuous(breaks=seq(0,1600,60)) #mess with figure width
+```
+Notice how the collaborative playlists stick to the trend of non collaborative playlists very well, so considering both collaborative and non collaborative playlists is valid. Note: Most collaborative playlists do not exceed over 680 minutes. Afterwords, you have playlists that are only non-collaborative. There is also a correlation with total songs in a playlist with total duration in minutes.
+
+## Using Kaggle Data set to see the energy vs time of song, this can be used later on to say most hiphop music is upbeat (shorter songs, High playlist volume, High energy) and chill has less energy (longer songs, low playlist volume, low energy) 
+
+```{r}
+kPlaylistsGenre %>%
+  mutate(duration_minutes = duration_ms/60000) %>% 
+  ggplot(aes(x = duration_minutes, y = energy)) +
+  ggtitle("Energy in a song vs Time (minutes)") +
+  geom_smooth() +
+  scale_x_continuous(breaks=seq(0,15,1))
+```
+# danceability
+```{r}
+kPlaylistsGenre %>%
+  mutate(duration_minutes = duration_ms/60000) %>% 
+  ggplot(aes(x = duration_minutes, y = danceability)) +
+  ggtitle("Danceability in a song vs Time (minutes)") +
+  geom_smooth() +
+  scale_x_continuous(breaks=seq(0,15,1))
+```
+
+## Density plot to show where is the most common energy among all songs (approx. Median Energy = 0.9)
+
+```{r}
+ggplot(kPlaylistsGenre, aes(energy)) +
+  ggtitle("Density of energy in songs") +
+  geom_density() 
+```
+# danceability
+```{r}
+ggplot(kPlaylistsGenre, aes(danceability)) +
+  ggtitle("Density of danceability in songs") +
+  geom_density() 
+```
+
+## Function Defined
+Here we have a function that will calculate the averages of a given playlist 
+```{r}
+averages <- function(duration_ms, num_tracks) {
+  AvgTime <- mean(duration_ms/60000)
+  AvgSongs <- mean(num_tracks)
+  AvgSongLength <- AvgTime/AvgSongs
+  return(c(AvgTime, AvgSongs, AvgSongLength))
+}
+```
+## Calculating: Averages (no filter)
+Firstly, find the overall averages of the whole data set to compare later on.
+```{r}
+AvgData <- rbind(AvgData, c(averages(sPlaylistsTotal$duration_ms, sPlaylistsTotal$num_tracks), "No Filter"))
+#print("The ideal playlist is 66 songs long, totaling 4 hours and 20 minutes in time. This then averages to 3 minutes and 55 seconds for each song.")
+```
+## Calculating: Averages, Filtered by Hiphop 
+Here, grepl is used to filter out only playlists with the title "hiphop" involved. This will then give us the averages of the playlists only containing the word "hiphop"
+```{r}
+hiphop_filtered <- sPlaylistsTotal %>%
+  filter(grepl("hiphop", name, ignore.case = TRUE)) 
+AvgData <- rbind(AvgData,  c(averages(hiphop_filtered$duration_ms, hiphop_filtered$num_tracks), "hiphop"))
+```
+
+## Calculating: Averages, Filtered by Chill
+Here is another look at another key word, "Chill". Chill playlists are found to be longer and have longer song lengths. These playlists tend to feature songs with lower energy, regardless of length. 
+```{r}
+chill_filtered <- sPlaylistsTotal %>%
+  filter(grepl("chill", name, ignore.case = TRUE)) 
+AvgData <- rbind(AvgData,  c(averages(chill_filtered$duration_ms, chill_filtered$num_tracks), "Chill"))
+colnames(AvgData) <- c("Time_in_Minutes", "Songs_in_Playlist", "Song_Length_Minutes","Catagory")
+```
+## Plotting Points Now Using Averages
+```{r}
+AvgPlot <- 
+  ggplot(data=sPlaylistsTotal, aes(x=duration_ms, y=num_tracks)) +
+  ggtitle("Number of Tracks vs Time (alternative view)") +
+  geom_point(stat="identity")
+AvgPlot
+```
+This scatter plot lets users look at the raw data. The time calculated down to the millisecond for the best possible accuracy of the data. This scatter plot lines up with the previous graph in the data which is a good sign signifying that the averages in AvgData have been recorded properly. 
+
+## Calculating: Averages, Filtered by Rap 
+```{r}
+rap_filtered <- sPlaylistsTotal %>%
+  filter(grepl("rap", name, ignore.case = TRUE)) 
+AvgData <- rbind(AvgData,  c(averages(rap_filtered$duration_ms, rap_filtered$num_tracks), "Rap"))
+colnames(AvgData) <- c("Time_in_Minutes", "Songs_in_Playlist", "Song_Length_Minutes","Catagory")
+show(rap_filtered)
+```
+
+## A For loop to Cycle Through Each Row in AvgData (no filter, hiphop, chill, rap)
+```{r}
+for (i in 1:nrow(AvgData)) {
+      print(paste("the average playlist length in minutes for", AvgData$Catagory[i], "is:", AvgData$Time_in_Minutes[i], "the average playlist length in songs", AvgData$Catagory[i], " is:", AvgData$Songs_in_Playlist[i], "the average song length for", AvgData$Catagory[i], "is:", AvgData$Song_Length_Minutes[i]))
+}
+```
+# Average Rap/Hiphop/Chill playlist found
+
+Now that we have values for these associated genres, we can calculate averages of these playlists length in songs, time and individual song time. We can say then for us to create a playlist to suggest to the "rap" category must be within a few degrees of 327 total minutes of listen time and 83 songs in total. Each song will average nearly 4 minutes in length total.
+
+# Creating new playlists by filtering "RnB", A genre associated with Rap and Danceablility 
+
+After our recent findings with the Spotify data set and the genre "rap", lets take a look at how we can now suggest new playlists to users based off of their input. We will look at the genre associated with rap, "RnB" and filter by it first. 
+
+# User Filters by RnB first
+```{r}
+#user input would be "Rnb"
+RnB_filtered <- kPlaylistsGenre %>%
+  filter(grepl("RnB", genre, ignore.case = TRUE)) 
+AvgData <- rbind(AvgData,  c(averages(hiphop_filtered$duration_ms, hiphop_filtered$num_tracks), "RnB"))
+show(RnB_filtered)
+```
+# Now filtering by danceability, note this should be adjustiable via slider in app
+```{r}
+RnB_filtered2 <- RnB_filtered %>%
+  #implementation of user input, allow user to determine values via slider in app see figure 13.
+  filter(danceability > .800) 
+AvgData <- rbind(AvgData,  c(averages(hiphop_filtered$duration_ms, hiphop_filtered$num_tracks), "RnB"))
+show(RnB_filtered2)
+```
+# Selecting columns we want to look at, making sure each value is above threshold.
+```{r}
+#selected columns 1 and 2 to show the danceability that is approved above our filtration and shows the song names related. 
+RnB_DanceFilter <- RnB_filtered2 %>%
+  select(1,20)
+show(RnB_DanceFilter)
+```
+# Now selecting main column, revealing song list
+```{r}
+RnB_DanceFilter2 <- RnB_DanceFilter %>%
+  select(2)
+```
+# Now we can create a list with the song names from the data set after our filtration.
+```{r}
+New_Playlist <- list(RnB_DanceFilter2, c("song_name"))
+#show(New_Playlist)
+#remove # from show to reveal all songs in list NOTE THIS WILL RELEASE 373 ROWS
+```
+
+
+
+```{r}
+list1=New_Playlist
+
+list1[[sample(1:length(10), 1)]]
+```
+
+
+
